@@ -14,7 +14,13 @@
     #controls { margin-bottom: 15px; }
     #resetBtn, #saveBtn, #resetDefaultBtn { padding: 8px 16px; font-size: 16px; margin-right: 10px; }
     #checklistSelector { margin-bottom: 20px; font-size: 16px; padding: 6px; }
+    #addRootTaskBtn { padding:8px 16px; font-size: 16px;
     label { cursor: pointer; user-select: none; }
+    expand-btn { width: 20px;  visibility: hidden; }
+    .task.has-subtasks .expand-btn { visibility: visible; }
+    .task { margin-left: 20px; margin-top: 5px; display: flex; align-items: center; gap: 8px; }
+    .task-root { margin-left: 0; font-weight: bold; padding: 5px 10px; border-radius: 5px; }
+  
   </style>
 </head>
 <body>
@@ -106,13 +112,14 @@
       container.className = 'task';
       if (task.isAdded) container.classList.add('added');
       if (task.isRemoved) container.classList.add('removed');
+      if (task.subTasks.length > 0) container.classList.add('has-subtasks');
 
       const expandBtn = document.createElement('button');
       expandBtn.textContent = task.expanded ? '-' : '+';
-      expandBtn.style.display = task.subTasks.length > 0 ? 'inline-block' : 'none';
+      expandBtn.className = 'expand-btn';
       expandBtn.addEventListener('click', () => {
         task.expanded = !task.expanded;
-        renderChecklist(tasks);
+        renderChecklist(tasks); 
       });
 
       const checkbox = document.createElement('input');
@@ -187,6 +194,14 @@
     document.getElementById('resetBtn').addEventListener('click', resetChecklist);
     document.getElementById('saveBtn').addEventListener('click', saveChecklist);
     document.getElementById('resetDefaultBtn').addEventListener('click', resetToDefault);
+
+    document.getElementById('addRootTaskBtn').addEventListener('click', () => {
+    const name = prompt('Enter new root task name:');
+    if (name) {
+      currentId++;
+      tasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true });
+      renderChecklist(tasks);
+      } });
 
     tasks = loadChecklist(currentChecklistKey);
     renderChecklist(tasks);
