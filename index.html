@@ -12,15 +12,11 @@
     .removed { background-color: #ffe0e0; text-decoration: line-through; }
     button { margin-left: 5px; }
     #controls { margin-bottom: 15px; }
-    #resetBtn, #saveBtn, #resetDefaultBtn { padding: 8px 16px; font-size: 16px; margin-right: 10px; }
+    #resetBtn, #saveBtn, #resetDefaultBtn, #addRootTaskBtn { padding: 8px 16px; font-size: 16px; margin-right: 10px; }
     #checklistSelector { margin-bottom: 20px; font-size: 16px; padding: 6px; }
-    #addRootTaskBtn { padding:8px 16px; font-size: 16px;
     label { cursor: pointer; user-select: none; }
-    expand-btn { width: 20px;  visibility: hidden; }
-    .task.has-subtasks .expand-btn { visibility: visible; }
-    .task { margin-left: 20px; margin-top: 5px; display: flex; align-items: center; gap: 8px; }
-    .task-root { margin-left: 0; font-weight: bold; padding: 5px 10px; border-radius: 5px; }
-  
+    .expand-btn { padding: 8px 8px; margin-right: 10px; visibility: hidden; }
+    
   </style>
 </head>
 <body>
@@ -39,28 +35,58 @@
   </div>
 
   <div id="checklist"></div>
+  <div style="margin-top: 20px;">
+    <button id="addRootTaskBtn">+ Add Root Task</button>
+  </div>
 
   <script>
     const STORAGE_KEY_PREFIX = 'incidentChecklist_';
     let currentChecklistKey = 'accountCompromise';
     let tasks = [];
-    let currentId = 50;
+    let currentId = 100;
 
     const defaultItems = {
       accountCompromise: [
-        { id: 1, name: 'Reset Account Password', completed: false, subTasks: [], expanded: false },
-        { id: 2, name: 'Review Account Activity', completed: false, subTasks: [], expanded: false },
-        { id: 3, name: 'Notify Security Team', completed: false, subTasks: [], expanded: false }
+        {
+          id: 1, name: 'Reset Account Password', completed: false, expanded: false, ExpandBtnVisible: true,
+          subTasks: [
+            { id: 11, name: 'Force password reset via admin portal', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false },
+            { id: 12, name: 'Notify user to update credentials', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
+          ]
+        },
+        {
+          id: 2, name: 'Review Account Activity', completed: false, expanded: false, ExpandBtnVisible: true,
+          subTasks: [
+            { id: 13, name: 'Check sign-in logs', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
+          ]
+        },
+        { id: 3, name: 'Notify Security Team', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
       ],
       phishingAttack: [
-        { id: 4, name: 'Analyze Email Header', completed: false, subTasks: [], expanded: false },
-        { id: 5, name: 'Identify Malicious Links', completed: false, subTasks: [], expanded: false },
-        { id: 6, name: 'Notify Employees', completed: false, subTasks: [], expanded: false }
+        {
+          id: 4, name: 'Analyze Email Header', completed: false, expanded: false, ExpandBtnVisible: true,
+          subTasks: [
+            { id: 14, name: 'Check sender domain', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
+          ]
+        },
+        { id: 5, name: 'Identify Malicious Links', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false },
+        { id: 6, name: 'Notify Employees', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
       ],
       malwareAttack: [
-        { id: 7, name: 'Isolate Infected System', completed: false, subTasks: [], expanded: false },
-        { id: 8, name: 'Run Antivirus Scan', completed: false, subTasks: [], expanded: false },
-        { id: 9, name: 'Analyze Malware Behavior', completed: false, subTasks: [], expanded: false }
+        {
+          id: 7, name: 'Isolate Infected System', completed: false, expanded: false, ExpandBtnVisible: true,
+          subTasks: [
+            { id: 15, name: 'Remove from network', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
+          ]
+        },
+        {
+          id: 8, name: 'Run Antivirus Scan', completed: false, expanded: false, ExpandBtnVisible: true,
+          subTasks: [
+            { id: 16, name: 'Update virus definitions', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false },
+            { id: 17, name: 'Full system scan', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
+          ]
+        },
+        { id: 9, name: 'Analyze Malware Behavior', completed: false, subTasks: [], expanded: false, ExpandBtnVisible: false }
       ]
     };
 
@@ -107,19 +133,21 @@
       renderChecklist(tasks);
     }
 
-    function renderTask(task) {
+    function renderTask(task, isRoot = false) {
       const container = document.createElement('div');
       container.className = 'task';
+      if (isRoot) container.classList.add('task-root');
+      if (task.ExpandBtnVisible) container.classList.add('has-subtasks'); else container.classList.remove('has-subtasks');
       if (task.isAdded) container.classList.add('added');
       if (task.isRemoved) container.classList.add('removed');
-      if (task.subTasks.length > 0) container.classList.add('has-subtasks');
 
       const expandBtn = document.createElement('button');
-      expandBtn.textContent = task.expanded ? '-' : '+';
+      expandBtn.textContent = task.expanded ? '^' : '>';
       expandBtn.className = 'expand-btn';
+      expandBtn.style.visibility = task.ExpandBtnVisible ? 'visible' : 'hidden';
       expandBtn.addEventListener('click', () => {
         task.expanded = !task.expanded;
-        renderChecklist(tasks); 
+        renderChecklist(tasks);
       });
 
       const checkbox = document.createElement('input');
@@ -135,12 +163,17 @@
       const addBtn = document.createElement('button');
       addBtn.textContent = '+';
       addBtn.addEventListener('click', () => {
-        const name = prompt('New subtask:');
+        const name = prompt('New subtask name*:');
+        if (name === null) return;
         if (name) {
           currentId++;
-          task.subTasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true });
+          task.subTasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true, ExpandBtnVisible: false });
+          task.expanded = true;
+          task.ExpandBtnVisible = true;
+          renderChecklist(tasks);
+        } else {
+          alert("Task name is required, try again")
         }
-        renderChecklist(tasks);
       });
 
       const removeBtn = document.createElement('button');
@@ -154,7 +187,7 @@
       undoBtn.textContent = 'Undo';
       undoBtn.style.display = task.isRemoved ? 'inline-block' : 'none';
       undoBtn.addEventListener('click', () => {
-        task.isRemoved = false;
+        delete task.isRemoved;
         renderChecklist(tasks);
       });
 
@@ -181,7 +214,7 @@
       const checklist = document.getElementById('checklist');
       checklist.innerHTML = '';
       tasks.forEach(task => {
-        checklist.appendChild(renderTask(task));
+        checklist.appendChild(renderTask(task, true));
       });
     }
 
@@ -194,14 +227,14 @@
     document.getElementById('resetBtn').addEventListener('click', resetChecklist);
     document.getElementById('saveBtn').addEventListener('click', saveChecklist);
     document.getElementById('resetDefaultBtn').addEventListener('click', resetToDefault);
-
     document.getElementById('addRootTaskBtn').addEventListener('click', () => {
-    const name = prompt('Enter new root task name:');
-    if (name) {
-      currentId++;
-      tasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true });
-      renderChecklist(tasks);
-      } });
+      const name = prompt('New root task:');
+      if (name) {
+        currentId++;
+        tasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true });
+        renderChecklist(tasks);
+      }
+    });
 
     tasks = loadChecklist(currentChecklistKey);
     renderChecklist(tasks);
