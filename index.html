@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Incident Response Checklist</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 700px; margin: auto; }
+    .task { margin-left: 20px; margin-top: 5px; }
+    .task-root { margin-left: 0; }
+    .added { background-color: #e0ffe0; }
+    .removed { background-color: #ffe0e0; text-decoration: line-through; }
+    button { margin-left: 5px; }
+    #controls { margin-bottom: 15px; }
+    #resetBtn, #saveBtn, #resetDefaultBtn { padding: 8px 16px; font-size: 16px; margin-right: 10px; }
+    #checklistSelector { margin-bottom: 20px; font-size: 16px; padding: 6px; }
+    label { cursor: pointer; user-select: none; }
+  </style>
+</head>
+<body>
+  <h1>Incident Response Checklist</h1>
+
+  <select id="checklistSelector">
+    <option value="accountCompromise">User Account Compromise</option>
+    <option value="phishingAttack">Phishing Attack</option>
+    <option value="malwareAttack">Malware Attack</option>
+  </select>
+
+  <div id="controls">
+    <button id="resetBtn">Reset</button>
+    <button id="saveBtn">Save Changes</button>
+    <button id="resetDefaultBtn">Reset to Default</button>
+  </div>
+
+  <div id="checklist"></div>
+
+  <script>
+    const STORAGE_KEY_PREFIX = 'incidentChecklist_';
+    let currentChecklistKey = 'accountCompromise';
+    let tasks = [];
+    let currentId = 50;
+
+    const defaultItems = {
+      accountCompromise: [
+        { id: 1, name: 'Reset Account Password', completed: false, subTasks: [], expanded: false },
+        { id: 2, name: 'Review Account Activity', completed: false, subTasks: [], expanded: false },
+        { id: 3, name: 'Notify Security Team', completed: false, subTasks: [], expanded: false }
+      ],
+      phishingAttack: [
+        { id: 4, name: 'Analyze Email Header', completed: false, subTasks: [], expanded: false },
+        { id: 5, name: 'Identify Malicious Links', completed: false, subTasks: [], expanded: false },
+        { id: 6, name: 'Notify Employees', completed: false, subTasks: [], expanded: false }
+      ],
+      malwareAttack: [
+        { id: 7, name: 'Isolate Infected System', completed: false, subTasks: [], expanded: false },
+        { id: 8, name: 'Run Antivirus Scan', completed: false, subTasks: [], expanded: false },
+        { id: 9, name: 'Analyze Malware Behavior', completed: false, subTasks: [], expanded: false }
+      ]
+    };
+
+    function deepClone(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+
+    function loadChecklist(key) {
+      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + key);
+      return saved ? JSON.parse(saved) : deepClone(defaultItems[key]);
+    }
+
+    function cleanRemovedTasks(taskList) {
+      return taskList.filter(task => !task.isRemoved).map(task => ({
+        ...task,
+        isAdded: false,
+        subTasks: cleanRemovedTasks(task.subTasks)
+      }));
+    }
+
+    function saveChecklist() {
+      tasks = cleanRemovedTasks(tasks);
+      localStorage.setItem(STORAGE_KEY_PREFIX + currentChecklistKey, JSON.stringify(tasks));
+      renderChecklist(tasks);
+    }
+
+    function resetChecklist() {
+      function uncheckAndCollapse(taskList) {
+        taskList.forEach(task => {
+          task.completed = false;
+          task.expanded = false;
+          if (task.subTasks.length > 0) {
+            uncheckAndCollapse(task.subTasks);
+          }
+        });
+      }
+      uncheckAndCollapse(tasks);
+      renderChecklist(tasks);
+    }
+
+    function resetToDefault() {
+      localStorage.removeItem(STORAGE_KEY_PREFIX + currentChecklistKey);
+      tasks = deepClone(defaultItems[currentChecklistKey]);
+      renderChecklist(tasks);
+    }
+
+    function renderTask(task) {
+      const container = document.createElement('div');
+      container.className = 'task';
+      if (task.isAdded) container.classList.add('added');
+      if (task.isRemoved) container.classList.add('removed');
+
+      const expandBtn = document.createElement('button');
+      expandBtn.textContent = task.expanded ? '-' : '+';
+      expandBtn.style.display = task.subTasks.length > 0 ? 'inline-block' : 'none';
+      expandBtn.addEventListener('click', () => {
+        task.expanded = !task.expanded;
+        renderChecklist(tasks);
+      });
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = task.completed;
+      checkbox.addEventListener('change', () => {
+        task.completed = checkbox.checked;
+      });
+
+      const label = document.createElement('label');
+      label.textContent = task.name;
+
+      const addBtn = document.createElement('button');
+      addBtn.textContent = '+';
+      addBtn.addEventListener('click', () => {
+        const name = prompt('New subtask:');
+        if (name) {
+          currentId++;
+          task.subTasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true });
+        }
+        renderChecklist(tasks);
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '-';
+      removeBtn.addEventListener('click', () => {
+        task.isRemoved = true;
+        renderChecklist(tasks);
+      });
+
+      const undoBtn = document.createElement('button');
+      undoBtn.textContent = 'Undo';
+      undoBtn.style.display = task.isRemoved ? 'inline-block' : 'none';
+      undoBtn.addEventListener('click', () => {
+        task.isRemoved = false;
+        renderChecklist(tasks);
+      });
+
+      container.appendChild(expandBtn);
+      container.appendChild(checkbox);
+      container.appendChild(label);
+      container.appendChild(addBtn);
+      container.appendChild(removeBtn);
+      container.appendChild(undoBtn);
+
+      if (task.subTasks.length > 0) {
+        const subTasksContainer = document.createElement('div');
+        subTasksContainer.style.display = task.expanded ? 'block' : 'none';
+        task.subTasks.forEach(subTask => {
+          subTasksContainer.appendChild(renderTask(subTask));
+        });
+        container.appendChild(subTasksContainer);
+      }
+
+      return container;
+    }
+
+    function renderChecklist(tasks) {
+      const checklist = document.getElementById('checklist');
+      checklist.innerHTML = '';
+      tasks.forEach(task => {
+        checklist.appendChild(renderTask(task));
+      });
+    }
+
+    document.getElementById('checklistSelector').addEventListener('change', (e) => {
+      currentChecklistKey = e.target.value;
+      tasks = loadChecklist(currentChecklistKey);
+      renderChecklist(tasks);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', resetChecklist);
+    document.getElementById('saveBtn').addEventListener('click', saveChecklist);
+    document.getElementById('resetDefaultBtn').addEventListener('click', resetToDefault);
+
+    tasks = loadChecklist(currentChecklistKey);
+    renderChecklist(tasks);
+  </script>
+</body>
+</html>
