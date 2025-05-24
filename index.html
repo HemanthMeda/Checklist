@@ -1,49 +1,84 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Incident Response Checklist</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 700px; margin: auto; }
-    .task { margin-left: 20px; margin-top: 5px; }
-    .task-root { margin-left: 0; }
-    .added { background-color: #e0ffe0; }
-    .removed { background-color: #ffe0e0; text-decoration: line-through; }
-    button { margin-left: 5px; }
-    #controls { margin-bottom: 15px; }
-    #resetBtn, #saveBtn, #resetDefaultBtn, #addRootTaskBtn { padding: 8px 16px; font-size: 16px; margin-right: 10px; }
-    #checklistSelector { margin-bottom: 20px; font-size: 16px; padding: 6px; }
-    label { cursor: pointer; user-select: none; }
-    .expand-btn { padding: 8px 8px; margin-right: 10px; visibility: hidden; }
-    
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 700px;
+      margin: auto;
+      background-color: #f9f9f9;
+    }
+    h1 {
+      text-align: center;
+    }
+    .task {
+      margin-left: 20px;
+      margin-top: 5px;
+    }
+    .task-root {
+      margin-left: 0;
+    }
+    .added {
+      background-color: #e0ffe0;
+    }
+    .removed {
+      background-color: #ffe0e0;
+      text-decoration: line-through;
+    }
+    button {
+      margin-left: 5px;
+      <!--padding: 5px 10px;-->
+    }
+    #controls, #historyControls {
+      margin-bottom: 15px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    #resetBtn, #saveBtn, #resetDefaultBtn, #addRootTaskBtn, #undoBtn, #redoBtn {
+      padding: 8px 16px;
+      font-size: 16px;
+    }
+    #checklistSelector {
+      margin-bottom: 20px;
+      font-size: 16px;
+      padding: 6px;
+    }
+    label {
+      cursor: pointer;
+      user-select: none;
+    }
+    .expand-btn {
+      padding: 8px;
+      margin-right: 10px;
+      visibility: hidden;
+    }
   </style>
 </head>
 <body>
-  <h1>Incident Response Checklist</h1>
-
-  <select id="checklistSelector">
+  <h1>Incident Response Checklist</h1>  <select id="checklistSelector">
     <option value="accountCompromise">User Account Compromise</option>
     <option value="phishingAttack">Phishing Attack</option>
     <option value="malwareAttack">Malware Attack</option>
-  </select>
-
-  <div id="controls">
+  </select>  <div id="controls">
     <button id="resetBtn">Reset</button>
     <button id="saveBtn">Save Changes</button>
     <button id="resetDefaultBtn">Reset to Default</button>
-  </div>
-
-  <div id="checklist"></div>
+    <button id="undoBtn">Undo</button>
+    <button id="redoBtn">Redo</button>
+  </div>  <div id="checklist"></div>
   <div style="margin-top: 20px;">
     <button id="addRootTaskBtn">+ Add Root Task</button>
-  </div>
-
-  <script>
+  </div>  <script>
     const STORAGE_KEY_PREFIX = 'incidentChecklist_';
     let currentChecklistKey = 'accountCompromise';
     let tasks = [];
     let currentId = 100;
+    let historyStack = [];
+    let redoStack = [];
 
     const defaultItems = {
       accountCompromise: [
@@ -94,9 +129,26 @@
       return JSON.parse(JSON.stringify(obj));
     }
 
-    function loadChecklist(key) {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + key);
-      return saved ? JSON.parse(saved) : deepClone(defaultItems[key]);
+    function saveToHistory() {
+      historyStack.push(JSON.stringify(tasks));
+      if (historyStack.length > 100) historyStack.shift();
+      redoStack = [];
+    }
+
+    function undo() {
+      if (historyStack.length > 0) {
+        redoStack.push(JSON.stringify(tasks));
+        tasks = JSON.parse(historyStack.pop());
+        renderChecklist(tasks);
+      }
+    }
+
+    function redo() {
+      if (redoStack.length > 0) {
+        historyStack.push(JSON.stringify(tasks));
+        tasks = JSON.parse(redoStack.pop());
+        renderChecklist(tasks);
+      }
     }
 
     function cleanRemovedTasks(taskList) {
@@ -108,12 +160,14 @@
     }
 
     function saveChecklist() {
+      saveToHistory();
       tasks = cleanRemovedTasks(tasks);
       localStorage.setItem(STORAGE_KEY_PREFIX + currentChecklistKey, JSON.stringify(tasks));
       renderChecklist(tasks);
     }
 
     function resetChecklist() {
+      saveToHistory();
       function uncheckAndCollapse(taskList) {
         taskList.forEach(task => {
           task.completed = false;
@@ -128,6 +182,7 @@
     }
 
     function resetToDefault() {
+      saveToHistory();
       localStorage.removeItem(STORAGE_KEY_PREFIX + currentChecklistKey);
       tasks = deepClone(defaultItems[currentChecklistKey]);
       renderChecklist(tasks);
@@ -154,6 +209,7 @@
       checkbox.type = 'checkbox';
       checkbox.checked = task.completed;
       checkbox.addEventListener('change', () => {
+        saveToHistory();
         task.completed = checkbox.checked;
       });
 
@@ -166,6 +222,7 @@
         const name = prompt('New subtask name*:');
         if (name === null) return;
         if (name) {
+          saveToHistory();
           currentId++;
           task.subTasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true, ExpandBtnVisible: false });
           task.expanded = true;
@@ -179,6 +236,7 @@
       const removeBtn = document.createElement('button');
       removeBtn.textContent = '-';
       removeBtn.addEventListener('click', () => {
+        saveToHistory();
         task.isRemoved = true;
         renderChecklist(tasks);
       });
@@ -187,6 +245,7 @@
       undoBtn.textContent = 'Undo';
       undoBtn.style.display = task.isRemoved ? 'inline-block' : 'none';
       undoBtn.addEventListener('click', () => {
+        saveToHistory();
         delete task.isRemoved;
         renderChecklist(tasks);
       });
@@ -201,6 +260,7 @@
       if (task.subTasks.length > 0) {
         const subTasksContainer = document.createElement('div');
         subTasksContainer.style.display = task.expanded ? 'block' : 'none';
+        subTasksContainer.style.marginLeft = '20px';
         task.subTasks.forEach(subTask => {
           subTasksContainer.appendChild(renderTask(subTask));
         });
@@ -230,15 +290,23 @@
     document.getElementById('addRootTaskBtn').addEventListener('click', () => {
       const name = prompt('New root task:');
       if (name) {
+        saveToHistory();
         currentId++;
         tasks.push({ id: currentId, name, completed: false, subTasks: [], expanded: false, isAdded: true });
         renderChecklist(tasks);
       }
     });
 
+    document.getElementById('undoBtn').addEventListener('click', undo);
+    document.getElementById('redoBtn').addEventListener('click', redo);
+
+    function loadChecklist(key) {
+      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + key);
+      return saved ? JSON.parse(saved) : deepClone(defaultItems[key]);
+    }
+
     tasks = loadChecklist(currentChecklistKey);
     renderChecklist(tasks);
-  </script>
-</body>
+  </script></body>
 </html>
 <!-- Partially generated with the help of AI -->
